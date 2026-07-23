@@ -1,102 +1,38 @@
-# SOC+ Hybrid Lab — Network Setup & Coordination
+ Endpoint Security & Telemetry Environment (Victim Machine Setup)
 
-This repository documents my contribution to the **SOC+ Hybrid Lab** project:
-building and configuring the underlying network infrastructure that the rest
-of the lab (Wazuh SIEM, victim machine, Kali attack machine) was deployed on
-top of, and coordinating connectivity across a remote team.
-
-This repository does **not** contain virtual machine images or operating
-systems — only documentation, setup steps, and screenshots demonstrating
-the working network.
+Documentation and setup details for building and deploying a fully instrumented **Windows 10 Victim Machine** on VMware, designed for endpoint telemetry collection, threat monitoring, and forensic artifact acquisition using **Wazuh Agent**, **System Monitor (Sysmon)**, and **Velociraptor**.
 
 ---
 
-## 📌 Objectives
+##  Role & Responsibilities
 
-- Build an isolated, controlled local network to simulate an internal
-  organizational network for the SOC lab.
-- Deploy and configure **pfSense** as the network gateway/firewall.
-- Extend that network to a distributed team using a VPN mesh overlay so
-  everyone could operate as if on one shared LAN.
-- Verify connectivity across all team machines before SOC tools were
-  deployed on the network.
+* **Virtualization & OS Deployment:** Provisioned and configured a baseline Windows 10 environment from scratch using VMware Workstation.
+* **Telemetry Agent Integration:** Deployed Sysmon for deep system logging and integrated Sysmon Event ID streams into the Wazuh Agent log collector (`ossec.conf`).
+* **Live Forensics Setup:** Configured and registered the Velociraptor endpoint agent to enable real-time VQL artifact collection and remote triage.
 
-## 🏗️ Architecture
+---
 
-A **hybrid network design**: a locally virtualized network for the SOC lab,
-extended to remote teammates over a VPN mesh overlay.
+##  Technical Implementation & Contributions
 
-```
-                 ┌───────────────────────────────┐
-                 │        Tailscale (VPN)        │
-                 │  mesh overlay — remote hosts   │
-                 └────────────────┬──────────────┘
-                                  │
-        ┌─────────────────────────────────────────────┐
-        │           VMnet2 (host-only network)          │
-        │                                                │
-        │            ┌──────────────────┐               │
-        │            │     pfSense      │               │
-        │            │  Gateway/Firewall│               │
-        │            │  WAN + LAN       │               │
-        │            └──────────────────┘               │
-        │                                                │
-        │   (Wazuh, victim, and Kali machines deployed   │
-        │    by teammates on top of this network)         │
-        └─────────────────────────────────────────────┘
-```
+### 1. Endpoint Provisioning (VMware & Windows 10)
+* Built a clean **Windows 10 Enterprise/Pro** virtual machine from ISO on VMware.
+* Configured isolated network adapters (NAT/Host-Only) and tailored security settings (disabling unnecessary updates while preserving auditing controls).
+* Optimized system performance and snapshots for quick rollback during threat simulation runs.
 
-- **VMnet2 (VMware host-only network):** an isolated private network so lab
-  VMs can talk to each other without being exposed to the internet —
-  simulating an internal organizational network.
-- **pfSense:** the gateway/firewall for the lab network. WAN and LAN
-  interfaces were assigned, LAN settings configured, and connectivity
-  between interfaces verified.
-- **Tailscale:** VMnet2 alone only connects VMs on a single host, so since
-  each team member worked from a different laptop/location, Tailscale was
-  used to create a secure VPN mesh so every machine could reach every other
-  machine as if on the same LAN.
+### 2. Sysmon Setup & Audit Logging
+* Installed **Microsoft System Monitor (Sysmon v14+)** on the victim host.
+* Configured advanced logging for key behavioral indicators:
+  * **Event ID 1:** Process Creation (with command-line arguments and parent process tracking).
+  * **Event ID 3:** Network Connection initiation.
+  * **Event ID 7:** Image / DLL Loading.
+  * **Event ID 11 / 23:** File creation and file deletion tracking.
+  * **Event ID 12/13/14:** Registry key modifications and key renames.
 
-## 🛠️ Tools Used
-
-| Tool | Purpose |
-|---|---|
-| VMware Workstation | Hosting the local virtual network |
-| pfSense | Network gateway / firewall |
-| Tailscale | VPN mesh for remote team connectivity |
-
-## 📂 Repository Structure
-
-```
-.
-├── README.md                  → project overview (this file)
-├── INSTALLATION.md            → step-by-step network setup guide
-├── docs/                       → full report
-│   └── SOC_Hybrid_Lab_Report.docx
-└── screenshots/                 → evidence of working setup
-    ├── 01-pfsense-console-boot.png
-    ├── 02-pfsense-web-dashboard.png
-    └── 03-tailscale-admin-console.png
-```
-
-## 🚀 Quick Start
-
-See [`INSTALLATION.md`](./INSTALLATION.md) for the full setup steps — from
-creating the VMnet2 network through to verifying team-wide connectivity.
-
-## 📸 Screenshots
-
-See the [`screenshots/`](./screenshots) folder: the pfSense console after
-boot-up (WAN/LAN interface assignment), the pfSense web dashboard, and the
-Tailscale admin console showing all team machines connected to the shared
-tailnet.
-
-## 📄 Documentation
-
-Full write-up of this work is in
-[`docs/SOC_Hybrid_Lab_Report.docx`](./docs/SOC_Hybrid_Lab_Report.docx).
-
-## ⚠️ Security Note
-
-No passwords, API keys, VPN auth keys, or other sensitive credentials are
-included anywhere in this repository.
+### 3. Wazuh Agent & Sysmon Integration
+* Deployed and registered the **Wazuh Agent** service pointing to the central Wazuh Manager.
+* Modified `ossec.conf` on the victim machine to ingest Windows Event Viewer channels, specifically binding the Sysmon operational log stream:
+  ```xml
+  <localfile>
+    <location>Microsoft-Windows-Sysmon/Operational</location>
+    <log_format>eventchannel</log_format>
+  </localfile>
